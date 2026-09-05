@@ -43,6 +43,7 @@ type Listener struct {
 	logger               *slog.Logger
 	icingaClient         *icinga2.Client
 	serviceNameValidator *regexp.Regexp
+	fingerprintExcludes  map[string]struct{}
 }
 
 // NewListener returns a new Listener based on the given configuration
@@ -53,6 +54,13 @@ func NewListener(config *config.Config, logger *slog.Logger, icingaClient *icing
 		icingaClient:         icingaClient,
 		serviceNameValidator: serviceNamePattern,
 	}
+
+	l.fingerprintExcludes = make(map[string]struct{}, len(config.AlertFingerprintExcludes)+1)
+	for _, e := range config.AlertFingerprintExcludes {
+		l.fingerprintExcludes[e] = struct{}{}
+	}
+
+	l.fingerprintExcludes["severity"] = struct{}{}
 
 	mux := http.NewServeMux()
 	// Register all handler functions here to have a central overview of the API
@@ -208,7 +216,7 @@ func (l *Listener) manageIcingaService(ctx context.Context, payload WebhookPaylo
 			l.logger.Warn("alert does not have label 'alertname'", "alert", alert)
 		}
 
-		serviceName := generateServiceName(l.config.ID, alert)
+		serviceName := generateServiceName(l.config.ID, alert, l.fingerprintExcludes)
 
 		if !l.serviceNameValidator.MatchString(serviceName) {
 			return fmt.Errorf("service name '%v' does not match Icinga constraints", serviceName)
@@ -405,10 +413,10 @@ func (l *Listener) generatePluginOutput(alert Alert, exitCode int) string {
 
 // generateServiceName generates a unique internal service name used for Icinga
 // Uses the instance's OD to ensure we accidentally touch another instance's services
-func generateServiceName(id string, alert Alert) string {
+func generateServiceName(id string, alert Alert, labelExcludes map[string]struct{}) string {
 	hash := sha256.New()
 	hash.Write([]byte(id))
-	hash.Write([]byte(mapToStableString(alert.Labels)))
+	hash.Write([]byte(mapToStableString(alert.Labels, labelExcludes)))
 	labelhash := hex.EncodeToString(hash.Sum(nil))[:16] // 16 characters
 	serviceName := alert.Labels["alertname"]
 	serviceName = fmt.Sprintf("%v_%v", serviceName, labelhash)
@@ -419,25 +427,18 @@ func generateServiceName(id string, alert Alert) string {
 // mapToStableString converts a map of alert labels to a string
 // representation which is stable if the same map of alert labels is provided
 // to subsequent calls of mapToStableString.
-func mapToStableString(data map[string]string) string {
-	var keys []string
-
-	for k := range data {
-		if k != "severity" {
-			keys = append(keys, k)
+func mapToStableString(data map[string]string, excludes map[string]struct{}) string {
+	pairs := make([]string, 0, len(data))
+	for k, v := range data {
+		if _, ok := excludes[k]; !ok {
+			s := fmt.Sprintf("%s:%s ", k, v)
+			pairs = append(pairs, s)
 		}
 	}
 
-	sort.Strings(keys)
+	sort.Strings(pairs)
 
-	var sb strings.Builder
-
-	for _, k := range keys {
-		s := fmt.Sprintf("%v:%v ", k, data[k])
-		sb.WriteString(s)
-	}
-
-	return sb.String()
+	return strings.Join(pairs, "")
 }
 
 // severityToExitStatus computes an exit code which Icinga understands from

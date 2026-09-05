@@ -105,31 +105,103 @@ func TestListener_handleHealthy_WithOK(t *testing.T) {
 }
 
 func TestGenerateServiceName(t *testing.T) {
-	alertF := Alert{
-		Status: "firing",
-		Labels: map[string]string{
-			"alertname": "example",
+	defaultExcludes := map[string]struct{}{
+		"severity": struct{}{},
+	}
+	testCases := map[string]struct {
+		haveId       string
+		haveAlert    Alert
+		haveExcludes map[string]struct{}
+		wantName     string
+	}{
+		"no excludes match (resolved)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "resolved",
+				Labels: map[string]string{
+					"alertname": "example",
+				},
+			},
+			haveExcludes: defaultExcludes,
+			wantName:     "example_5ffb3b3c756e0110",
+		},
+		"no excludes match (firing)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "firing",
+				Labels: map[string]string{
+					"alertname": "example",
+				},
+			},
+			haveExcludes: defaultExcludes,
+			wantName:     "example_5ffb3b3c756e0110",
+		},
+		"excluded labels (resolved)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "resolved",
+				Labels: map[string]string{
+					"alertname": "ExcludedLabels",
+					"severity":  "warning",
+					"priority":  "P7",
+				},
+			},
+			haveExcludes: map[string]struct{}{
+				"severity": struct{}{},
+				"priority": struct{}{},
+			},
+			wantName: "ExcludedLabels_2765b038f68bebee",
+		},
+		"excluded labels (firing)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "firing",
+				Labels: map[string]string{
+					"alertname": "ExcludedLabels",
+					"severity":  "critical",
+					"priority":  "P2",
+				},
+			},
+			haveExcludes: map[string]struct{}{
+				"severity": struct{}{},
+				"priority": struct{}{},
+			},
+			wantName: "ExcludedLabels_2765b038f68bebee",
+		},
+		"checksum (instance1)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "resolved",
+				Labels: map[string]string{
+					"alertname": "Checksum",
+					"severity":  "warning",
+					"instance":  "node01.example.com",
+				},
+			},
+			haveExcludes: defaultExcludes,
+			wantName:     "Checksum_e47ab10aa5d742b7",
+		},
+		"checksum (instance2)": {
+			haveId: "unittest",
+			haveAlert: Alert{
+				Status: "resolved",
+				Labels: map[string]string{
+					"alertname": "Checksum",
+					"severity":  "warning",
+					"instance":  "node02.example.com",
+				},
+			},
+			haveExcludes: defaultExcludes,
+			wantName:     "Checksum_3081e49e5c059f29",
 		},
 	}
-
-	alertR := Alert{
-		Status: "resolved",
-		Labels: map[string]string{
-			"alertname": "example",
-		},
-	}
-
-	expected := "example_5ffb3b3c756e0110"
-
-	actualF := generateServiceName("unittest", alertF)
-	actualR := generateServiceName("unittest", alertR)
-
-	if actualF != expected {
-		t.Fatalf("expected %v, got %v", expected, actualF)
-	}
-
-	if actualF != actualR {
-		t.Fatalf("expected firing and resolved alerts to have same name. firing: %v, resolved: %v", actualF, actualR)
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			got := generateServiceName(testCase.haveId, testCase.haveAlert, testCase.haveExcludes)
+			if testCase.wantName != got {
+				t.Fatalf("expected %v, got %v", testCase.wantName, got)
+			}
+		})
 	}
 }
 
@@ -455,6 +527,9 @@ func TestSeverityToExitCode(t *testing.T) {
 }
 
 func TestMapToStableString(t *testing.T) {
+	defaultExcludes := map[string]struct{}{
+		"severity": struct{}{},
+	}
 	tests := []struct {
 		name string
 		in   map[string]string
@@ -499,11 +574,30 @@ func TestMapToStableString(t *testing.T) {
 			},
 			want: "a:1 b:2 c:3 irrelev:x ",
 		},
+		{
+			name: "ambiguous labelset 1",
+			in: map[string]string{
+				// Label values MAY contain any UTF-8 characters.
+				// https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
+				"labels": "foo more:test",
+				"xyz":    "foo",
+			},
+			want: "labels:foo more:test xyz:foo ",
+		},
+		{
+			name: "ambiguous labelset 2",
+			in: map[string]string{
+				"labels": "foo",
+				"xyz":    "foo",
+				"more":   "test",
+			},
+			want: "labels:foo more:test xyz:foo ",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := mapToStableString(tt.in); got != tt.want {
+			if got := mapToStableString(tt.in, defaultExcludes); got != tt.want {
 				t.Errorf("mapToStableString() = %q, want %q", got, tt.want)
 			}
 		})
