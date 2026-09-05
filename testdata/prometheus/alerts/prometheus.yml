@@ -1,0 +1,22 @@
+---
+groups:
+  - name: Prometheus
+    rules:
+      - alert: PrometheusDiscoveryHighRequestRate
+        # this expression is NOT a proper solution to detect request spikes.
+        # it simply serves as an easy trigger for alerts:
+        # visit an endpoint in the Prometheus Web UI to trigger the alert
+        # (e.g. /service-discovery); refresh the page to cause the alert
+        # to resolve
+        expr: >-
+          prometheus_http_requests_total{handler=~".+-discovery"} % 2 == 1
+        for: 0m
+        labels:
+          severity: warning
+          icinga_use_host: prometheus.localhost
+        annotations:
+          message: High request volume on Prometheus discovery endpoint {{ $labels.handler }}
+          description: >-
+            Requests against the discovery endpoint {{ $labels.handler }}
+            are higher than the expected average.
+          runbook_url: https://runbooks.example.com/prometheus/{{ $labels.alertname }}
