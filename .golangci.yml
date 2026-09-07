@@ -14,6 +14,7 @@ linters:
     - depguard
     - err113
     - exhaustruct
+    - exhaustruct_v5
     - forbidigo
     - forcetypeassert
     - gochecknoglobals
@@ -49,6 +50,10 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      - path: 'internal/icinga2/model.go'
+        linters:
+          - recvcheck
 formatters:
   enable:
     - gofmt
