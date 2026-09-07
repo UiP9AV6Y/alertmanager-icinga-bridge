@@ -92,6 +92,7 @@ Flags:
 --checks-interval=12h                      Interval (in seconds) to be used for Icinga check_interval and retry_interval ($ALERTMANAGER_ICINGA_BRIDGE_SERVICE_CHECKS_INTERVAL)
 --keep-for=168h                            How long to keep created alerts around after they have been resolved ($ALERTMANAGER_ICINGA_BRIDGE_KEEP_FOR)
 --static-service-vars=KEY=VALUE;...        Custom variable to be set for created Icinga services (variable=value, can be repeated) ($ALERTMANAGER_ICINGA_BRIDGE_STATIC_SERVICE_VAR)
+--alert-fingerprint-excludes=severity,...  Alert labels to exclude from calculating the fingerprint (can be repeated) ($ALERTMANAGER_ICINGA_BRIDGE_ALERT_FINGERPRINT_EXCLUDES)
 ```
 
 Most flags can be set with environment variables, refer to the help to see which flags.

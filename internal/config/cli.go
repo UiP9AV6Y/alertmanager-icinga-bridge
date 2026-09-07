@@ -44,4 +44,6 @@ type CLI struct {
 	ChecksInterval          time.Duration     `kong:"default='12h',env='ALERTMANAGER_ICINGA_BRIDGE_SERVICE_CHECKS_INTERVAL',help='Interval (in seconds) to be used for Icinga check_interval and retry_interval'"`
 	KeepFor                 time.Duration     `kong:"default='168h',env='ALERTMANAGER_ICINGA_BRIDGE_KEEP_FOR',help='How long to keep created alerts around after they have been resolved'"`
 	StaticServiceVars       map[string]string `kong:"env='ALERTMANAGER_ICINGA_BRIDGE_STATIC_SERVICE_VAR',help='Custom variable to be set for created Icinga services (variable=value, can be repeated)'"`
+
+	AlertFingerprintExcludes []string `kong:"default='severity',env='ALERTMANAGER_ICINGA_BRIDGE_ALERT_FINGERPRINT_EXCLUDES',help='Alert labels to exclude from calculating the fingerprint (can be repeated)'"`
 }

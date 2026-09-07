@@ -21,6 +21,7 @@ type Config struct {
 	DisplayNameAsServiceName bool
 	ActiveChecks             bool
 	MaxCheckAttempts         float64
+	AlertFingerprintExcludes []string
 
 	LogLevel         string
 	ID               string
@@ -67,6 +68,7 @@ func NewConfigFromCLI(cli *CLI) (*Config, error) {
 		ListenAddr:               cli.ListenAddr,
 		IcingaTemplates:          cli.Templates,
 		MaxCheckAttempts:         float64(cli.MaxCheckAttempts),
+		AlertFingerprintExcludes: cli.AlertFingerprintExcludes,
 		PluginOutputAnnotations:  cli.PluginOutputAnnotations,
 		PluginOutputByStates:     cli.PluginOutputByStates,
 		StaticServiceVars:        cli.StaticServiceVars,
