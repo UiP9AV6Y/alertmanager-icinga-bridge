@@ -1,12 +1,123 @@
 ---
 version: '2'
 services:
-  alertmanager:
-    image: docker.io/prom/alertmanager
-    network_mode: host
-    volumes:
-    - ./alertmanager.yml:/alertmanager.yml
+  prometheus:
+    restart: unless-stopped
+    image: quay.io/prometheus/prometheus:v3.14.0-distroless
     command:
-    - '--config.file=/alertmanager.yml'
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.external-url=http://localhost:9090
     ports:
-    - '9093:9093'
+      - name: ui
+        target: 9090
+        host_ip: 127.0.0.1
+        published: "9090"
+    volumes:
+      - type: bind
+        source: ./prometheus
+        target: /etc/prometheus
+        read_only: true
+      - type: volume
+        source: prometheus-data
+        target: /prometheus
+    depends_on:
+      - alertmanager
+  alertmanager:
+    restart: unless-stopped
+    image: quay.io/prometheus/alertmanager:v0.34.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://localhost:9093
+    ports:
+      - name: ui
+        target: 9093
+        host_ip: 127.0.0.1
+        published: "9093"
+    volumes:
+      - type: bind
+        source: ./alertmanager
+        target: /etc/alertmanager
+        read_only: true
+      - type: volume
+        source: alertmanager-data
+        target: /alertmanager
+    depends_on:
+      - bridge
+  bridge:
+    restart: unless-stopped
+    image: ghcr.io/netways/alertmanager-icinga-bridge:1.0.3
+    env_file:
+      - ./bridge/config.env
+    depends_on:
+      - icinga
+  icinga:
+    restart: unless-stopped
+    image: docker.io/icinga/icinga2:2.15.6
+    volumes:
+      - type: bind
+        source: ./icinga/objects
+        target: /data-init/etc/icinga2/conf.d
+        read_only: true
+      - type: volume
+        source: icinga-data
+        target: /data
+    env_file:
+      - ./icinga/config.env
+    depends_on:
+      - valkey
+  icingadb:
+    restart: unless-stopped
+    image: docker.io/icinga/icingadb:1.5.1
+    env_file:
+      - ./icingadb/config.env
+    depends_on:
+    - valkey
+    - postgres
+  icingaweb:
+    restart: unless-stopped
+    image: docker.io/icinga/icingaweb2:2.14.0
+    ports:
+      - name: web
+        target: 8080
+        host_ip: 127.0.0.1
+        published: "8080"
+    env_file:
+      - ./icingaweb/config.env
+    depends_on:
+    - valkey
+    - postgres
+  valkey:
+    restart: unless-stopped
+    image: docker.io/valkey/valkey:9.1.2-alpine
+    command:
+      - /usr/local/etc/valkey/valkey.conf
+    volumes:
+      - type: bind
+        source: ./valkey
+        target: /usr/local/etc/valkey
+        read_only: true
+      - type: volume
+        source: valkey-data
+        target: /data
+  postgres:
+    restart: unless-stopped
+    image: docker.io/library/postgres:18.6-alpine
+    volumes:
+      - type: bind
+        source: ./postgres/init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql
+    env_file:
+      - ./postgres/config.env
+
+volumes:
+  alertmanager-data:
+  prometheus-data:
+  postgres-data:
+  icinga-data:
+  valkey-data:
